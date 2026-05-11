@@ -229,8 +229,7 @@ STRICT RULES:
 
         throw new Error("Gemini response did not match the Zod schema.");
     }
-
-    console.log(validated.data);
+    
     return validated.data;
 }
 
