@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from "react";
 import "../style/interview.scss";
 import {useInterview} from "../hooks/useInterview.js";
-import {useParams} from "react-router";
+import {Navigate, useParams} from "react-router";
 
 
 const NAV_ITEMS = [
@@ -141,12 +141,18 @@ const Interview = () => {
         }
     }, [interviewId]);
 
-    if (loading || !report) {
+    if (loading) {
         return (
             <main className="loading-screen">
                 <h1>Loading your interview plan...</h1>
             </main>
         );
+    }
+
+    if (!report) {
+        return (
+            <Navigate to="/"/>
+        )
     }
 
     const scoreColor =
