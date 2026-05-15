@@ -17,6 +17,12 @@ const interviewRouter = require("./routes/inteview.routes")
 
 
 /* using all the routes here */
+
+app.get("/", (req, res) => {
+    res.send("Backend service is up and running")
+})
+
+
 app.use("/api/auth", authRouter)
 app.use("/api/interview", interviewRouter)
 
