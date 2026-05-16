@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "bun --watch server.js",
+    "postinstall": "npx puppeteer browsers install chrome",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "private": true,
