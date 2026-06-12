@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+    image: genai-backend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGO_URI: ${MONGO_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      GOOGLE_GENAI_API_KEY: ${GOOGLE_GENAI_API_KEY}
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+    restart: unless-stopped
