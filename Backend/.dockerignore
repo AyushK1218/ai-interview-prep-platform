@@ -1,0 +1,12 @@
+node_modules
+.bun
+.cache
+coverage
+dist
+build
+tmp
+*.log
+.env
+.env.*
+.git
+.DS_Store

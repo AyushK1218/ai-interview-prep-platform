@@ -227,30 +227,96 @@ STRICT RULES:
 }
 
 async function generatePdfFromHtml(htmlContent) {
+    // Build launch/connect options. In production environments Chromium may not be
+    // available or puppeteer may not be allowed to download a bundled Chromium.
+    // Support the following environment variables for production:
+    // - PUPPETEER_EXECUTABLE_PATH or CHROME_PATH: path to an existing Chrome/Chromium binary
+    // - PUPPETEER_WS_ENDPOINT: WebSocket endpoint for a remote Chrome (browserless or chrome-remote)
+    const defaultArgs = [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+    ];
 
-    const browser = await puppeteer.launch({
+    const launchOptions = {
         headless: true,
-        args: [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-        ],
-    });
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, {waitUntil: "networkidle0"})
+        args: defaultArgs,
+    };
 
-    const pdfBuffer = await page.pdf({
-        format: "A4", margin: {
-            top: "20mm",
-            bottom: "20mm",
-            left: "15mm",
-            right: "15mm"
+    // Prefer explicit executable path when provided by the hosting environment
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    } else if (process.env.CHROME_PATH) {
+        launchOptions.executablePath = process.env.CHROME_PATH;
+    }
+
+    let browser;
+
+    try {
+        if (process.env.PUPPETEER_WS_ENDPOINT) {
+            // Connect to remote browser (for example browserless/chrome-remote)
+            browser = await puppeteer.connect({
+                browserWSEndpoint: process.env.PUPPETEER_WS_ENDPOINT,
+            });
+        } else {
+            // Normal local launch. If the environment does not have Chromium this
+            // call will throw — we catch below and provide guidance.
+            browser = await puppeteer.launch(launchOptions);
         }
-    })
+    } catch (launchErr) {
+        console.error("Puppeteer launch/connect failed:", launchErr && (launchErr.stack || launchErr.message || launchErr));
+        // Provide a helpful error that explains common production fixes.
+        const helpMsg = `PDF generation failed because Puppeteer could not start a Chromium instance.\n` +
+            `Common fixes:\n` +
+            ` - Install a system Chrome/Chromium binary and set PUPPETEER_EXECUTABLE_PATH (or CHROME_PATH) to its path.\n` +
+            ` - Use a remote browser service and set PUPPETEER_WS_ENDPOINT to the WebSocket URL.\n` +
+            ` - If you're using a platform that restricts native binaries (like some serverless providers), consider using a dedicated PDF generation service or a library that doesn't require Chromium.\n` +
+            `See server logs for more details.`;
 
-    await browser.close()
+        const err = new Error(helpMsg);
+        err.cause = launchErr;
+        throw err;
+    }
 
-    return pdfBuffer
+    try {
+        const page = await browser.newPage();
+        await page.setContent(htmlContent, {waitUntil: "networkidle0"});
+
+        const pdfBuffer = await page.pdf({
+            format: "A4",
+            margin: {
+                top: "20mm",
+                bottom: "20mm",
+                left: "15mm",
+                right: "15mm",
+            },
+        });
+
+        // If we connected to a remote browser we should not always close it; but
+        // close if this process owns the browser instance (launched locally).
+        try {
+            if (!process.env.PUPPETEER_WS_ENDPOINT && browser && typeof browser.close === "function") {
+                await browser.close();
+            } else if (process.env.PUPPETEER_WS_ENDPOINT && browser && browser.disconnect) {
+                // when connected to a remote browser, just disconnect (do not kill remote)
+                browser.disconnect();
+            }
+        } catch (closeErr) {
+            console.warn("Error while closing/disconnecting browser:", closeErr && (closeErr.stack || closeErr.message || closeErr));
+        }
+
+        return pdfBuffer;
+    } catch (err) {
+        // Attempt to close the browser before bubbling the error
+        try {
+            if (browser && typeof browser.close === "function") await browser.close();
+        } catch (closeErr) {
+            // ignore
+        }
+
+        console.error("Error while generating PDF:", err && (err.stack || err.message || err));
+        throw err;
+    }
 }
 
 async function generateResumePdf({resume, selfDescription, jobDescription}) {
